@@ -1,0 +1,427 @@
+https://www.hektorprofe.net/curso/proyecto-api-peliculas-django-rest-framework/creacion-proyecto
+La API de Django nos proporciona la interfaz web
+
+1- ESTRUCTURA DEL BACKEND
+Creando nuestro proyecto
+
+En cmd y directorio del proyecto: 
+pipenv install django==2.2.3
+pipenv run django-admin startproject api_pelis
+pipenv install djangorestframework ==3.9.1
+pipenv install markdown =3.0.1
+pipenv install django-filter==2.1.0
+
+En settings.py:
+INSTALLED_APPS = [
+	'rest_framework',
+]
+
+
+En Pipfile:
+
+[scripts]
+dev= "python manage.py runserver 127.0.0.1:8844"
+make= "python manage.py makemigrations"
+migrate "python manage.py migrate"
+
+
+En cmd:
+cd api_pelis
+pipenv run dev (para ejecutar la aplicación)
+Creamos una app para manejar la api: pipenv run python manage.py startapp api
+Activamos la app en el Settings.py:
+
+INSTALLED_APPS = [
+	'api',
+]
+
+Realizamos las migraciones iniciales para migrar el proyecto y crear la base de datos
+pipenv run migrate
+
+Creamos el usuario superadministrador:
+pipenv run python manage.py createsuperuser
+admin
+1234
+
+Ya podemos entrar en 127.0.0.1:8844/admin
+
+
+Modelo de película y serializador:
+
+Creamos nuestro modelo Pelicula para la API.
+En models.py:
+from django.db import models
+
+class Pelicula(models.Model):
+  titulo = models.CharField(max_length=150)
+  estreno = models.IntegerField(default=2000)
+  imagen = models.URLField(help_text="De imdb mismo")
+  resumen = models.TextField(help_text="Descripción corta")
+
+  class Meta: # Orden automático a partir del campo título
+    ordering = ['titulo']
+
+
+Migramos los cambios:
+pipenv run make
+pipenv run migrate
+
+
+Ahora vamos a configurar un serializador, éste definirá el contenido de las películas tal como las devolverá la API.
+Esto es algo de Django Rest Framework:
+
+Nuevo fichero en la carpeta api llamado serializer.py 
+
+En serializer.py:
+
+from .models import Pelicula
+from rest_framework import serializers
+
+class PeliculaSerializer(serializers.ModelSerializer): # transformar a formato JSON
+  class Meta:
+    model = Pelicula
+    # fields = ['id', 'titulo', 'imagen', 'estreno', 'resumen']
+    fields = '__all__'
+
+
+Programando la viewset y las urls:
+
+En api/views.py:
+
+from .models import Pelicula
+from .serializers import PeliculaSerializer # transformar a formato JSON
+from rest_framework import viewsets 
+
+class PeliculaViewSet(viewsets.ModelViewSet):
+  queryset = Pelicula.objects.all() # listar todas las películas
+  serializer_class = PeliculaSerializer
+
+En api_pelis/urls.py: 
+
+from django.contrib import admin
+from django.urls import path, include
+
+from api import views
+from rest_framework import routers
+
+router = routers.DefaultRouter()
+
+# En el router vamos añadiendo los endpoints a los viewsets
+router.register('peliculas', views.PeliculaViewSet)
+
+urlpatterns = [
+  path('api/v1/', include(router.urls)),
+  path('admin/', admin.site.urls),
+]
+
+
+Ahora podemos navegar a la API para manejar las películas:
+http://127.0.0.1:8844/api/v1/ # Cliente por defecto de Django REST Framework
+
+Si hacemos clic en "peliculas": "http://127.0.0.1:8844/api/v1/peliculas/", vemos la respuesta como una lista [].
+Podemos crear registros en el formulario. 
+Rellenamos los campos y clic en post. 
+Se habrá añadido en http://127.0.0.1:8844/api/v1/peliculas/
+
+Nuestra API inicialmente tiene permisos público y cualquier puede añadir una película sin estar logeado.
+Para hacerla privada y que no aparezca el formulario.
+En api_pelis/settings.py:
+
+REST_FRAMEWORK = {
+  'DEFAULT_PERMISSION_CLASSES': [                     
+    'rest_framework.permissions.DjangoModelPermissionsOrAnonReadOnly',
+  ],
+}
+
+
+
+Creamos el Padrino 1,2 y 3.
+----------------------------
+2- AUTENTICACIÓN CON TOKENS (ideal para webs asíncranas)
+El token es un identificador único de la sesión de un usuario que sirve como credenciales de acceso a la API. 
+Si el cliente envía este token en sus peticiones (que generaremos cuando se registra), ésta buscará si tiene los permisos necesarios para acceder a las acciones protegidas.
+
+Instalación de las dependencias
+
+Instalamos: 
+pipenv install django-rest-auth==0.9.3
+pipenv install django-allauth==0.38.0
+
+En api_pelis/settings.py:
+
+Al principio de: 
+INSTALLED_APPS = [
+    'django.contrib.sites',
+]
+
+Abajo del todo: 
+INSTALLED_APPS = [
+	'rest_framework.authtoken',
+    	'rest_auth',
+    	'rest_auth.registration',
+    	'allauth',
+    	'allauth.account',
+   	'allauth.socialaccount',
+]
+
+Justo debajo de las apps pondremos las siguientes variables:
+
+SITE_ID = 1
+
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_AUTHENTICATION_METHOD = 'email'
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_USERNAME_REQUIRED = False
+
+AUTHENTICATION_BACKENDS = (
+   "django.contrib.auth.backends.ModelBackend",
+   "allauth.account.auth_backends.AuthenticationBackend"
+)
+
+
+En api_pelis/urls.py:
+Añadimos a urlpatterns = [:
+
+path('api/v1/auth/', 
+  include('rest_auth.urls')),
+path('api/v1/auth/registration/', 
+  include('rest_auth.registration.urls')),
+
+]
+
+Finalmente migramos para crear las bases de datos para manejar las cuentas y la autenticación, de nuevo desde el directorio del proyecto api_pelis:
+pipenv run migrate
+
+Vamos a: 
+http://127.0.0.1:8844/api/v1/auth/registration/
+Y encontramos un fichero de registros en nuestra api:
+Username (no obligatorio), email, password1,password2
+
+En settings.py:
+LANGUAGE_CODE = 'en-us' cambiamos a 'es' para ponerlo en español. 
+
+Email: test@test.com
+password: Daniel1234
+
+Al registrarnos correctamente se nos devuelve una clave o token que tendremos que almacenar en nuestro cliente o donde queramos interactuar con las vistas protegidas enviadas en las cabeceras de todas las peticiones que hagamos a la API. 
+"key": "ac62e2e56b03e3ea299a7f9fccccc482eca89453"
+
+Cuanto un usuario quiera identifcarse lo hará desde:
+http://127.0.0.1:8844/api/v1/auth/login/
+Y también se nos devolverá el token.
+
+Interactuando con la API usando cURL
+La API de Django nos proporciona la interfaz web, pero ¿cómo crearíamos un usuario o haríamos el login desde un cliente?
+Para hacer una prueba vamos a usar cURL, una biblioteca que permite hacer peticiones en un montón de protocolos.
+
+
+Para registrar un usuario:
+curl -X POST http://127.0.0.1:8844/api/v1/auth/registration/ -d 
+"password1=TEST1234A&password2=TEST1234A&email=test2@test2.com"
+
+Se crea el usuario y la terminal nos devuelve el token. 
+
+Y para hacer login y conseguir el token:
+curl -X POST http://127.0.0.1:8844/api/v1/auth/login/ -d 
+"password=TEST1234A&email=test2@test2.com" 
+
+
+Si ahora vamos a http://127.0.0.1:8844/admin/login
+y entramos como admin y 1234, veremos un montón de apps nuevas y todos los usuarios creados. 
+
+La idea trabajando con clientes es crear estas peticiones y almacenar el token en el localStorage del navegador para más adelante pasarlos en las cabeceras de las peticiones que requieran autenticación.
+
+----------------------------
+3- SISTEMA DE PELIS FAVORITAS
+El sistema de películas favoritas constará de dos vistas: una para marcar o desmarcar una película como favorita y otra que devolverá todas las películas favoritas del usuario.
+Obviamente ambas vistas serán de acceso protegido y requerirán pasar el token de autenticación en las cabeceras.
+
+
+Creamos el nuevo modelo que relacione las películas con los usuarios en forma de favorito.
+Si esta relación entre una película y un usuario existe podremos entender que el usuario la tiene como favorita, y si la desmarca simplemente la borraremos de la base de datos.
+
+En api/models.py:
+
+from django.contrib.auth.models import User
+
+class PeliculaFavorita(models.Model):
+  pelicula = models.ForeignKey(Pelicula, on_delete=models.CASCADE)
+  usuario = models.ForeignKey(User, on_delete=models.CASCADE)
+
+Añadimos el serializador del modelo, en api/serializers.py:
+Hacemos uso del otro serializador Pelicula dentro de PeliculaFavorita para conseguir que la API devuelva instancias anidadas.
+
+from .models import Pelicula, PeliculaFavorita
+
+class PeliculaFavoritaSerializer(serializers.ModelSerializer):
+  
+  pelicula = PeliculaSerializer()
+
+  class Meta:
+    model = PeliculaFavorita
+    fields = ['pelicula']
+
+Migraciones en cmd: 
+pipenv run make
+pipenv run migrate
+
+---
+Vista de película favorita, api/views.py: 
+from .models import Pelicula, PeliculaFavorita
+from .serializers import PeliculaSerializer, PeliculaFavoritaSerializer
+
+from django.shortcuts import get_object_or_404
+
+from rest_framework import viewsets, views
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+
+
+class MarcarPeliculaFavorita(views.APIView):
+  authentication_classes = [TokenAuthentication]
+  permission_classes = [IsAuthenticated]
+
+  # POST -> Se usa para crear un recurso sin un identificador
+  # PUT -> Se usa para crear/reemplazar un recurso con un identificador
+
+  def post(self, request):
+
+    pelicula = get_object_or_404(
+      Pelicula, id=self.request.data.get('id', 0)
+    )
+
+    favorita, created = PeliculaFavorita.objects.get_or_create(
+      pelicula=pelicula, usuario=request.user
+    )
+
+    # Por defecto suponemos que se crea bien
+    content = {
+      'id': pelicula.id,
+      'favorita': True
+    }
+
+    # Si no se ha creado es que ya existe, entonces borramos el favorito
+    if not created:
+      favorita.delete()
+      content['favorita'] = False
+
+    return Response(content) # devuelve una estructura JSON
+
+
+En api_pelis/urls.py:
+path('api/v1/favorita/', views.MarcarPeliculaFavorita.as_view()),
+
+
+Vamos a http://127.0.0.1:8844/api/v1/favorita/
+Vemos que no estamos autorizados a acceder porque necesitamos autenticación con token. 
+
+Para crear una petición PUT con cURL hay que estructurarla de la siguiente forma, pasando el token del usuario que marcará una película en las cabeceras:
+En cmd: 
+curl -X POST http://127.0.0.1:8844/api/v1/favorita/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453" -d "id=1"
+Si todo es correcto nos devolverá: {"id":1,"favorita":true}
+
+¿Cómo podemos saber si realmente se creó? 
+La forma fácil sería añadir a la base de datos. 
+Usando DB Browser for SQLite es muy fácil abrir el fichero de la base de datos y analizar los datos de las tablas, en api_peliculafavorita.
+
+Como hemos comprobado el registro existe, si volvemos a ejecutar la petición anterior debería borrarla y nos devolverá:
+{"id":1,"favorita":false}
+
+---
+Vista de todas las películas favoritas de un usuario
+En api/views.py:
+
+class ListarPeliculasFavoritas(views.APIView):
+  authentication_classes = [TokenAuthentication]
+  permission_classes = [IsAuthenticated]
+
+  # GET -> Se usa para hacer lecturas
+
+  def get(self, request):
+
+    peliculas_favoritas = PeliculaFavorita.objects.filter(
+      usuario=request.user)
+    serializer = PeliculaFavoritaSerializer(
+      peliculas_favoritas, many=True)
+
+    return Response(serializer.data)
+
+En api_pelis/urls.py:
+path('api/v1/favoritas/', views.ListarPeliculasFavoritas.as_view()),
+
+Si vamos a : http://127.0.0.1:8844/api/v1/favoritas/
+Nos dice que no estamos autorizados.
+
+En cmd: 
+curl -X GET http://127.0.0.1:8844/api/v1/favoritas/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453"
+Nos devuelve una lista vacía
+
+
+Creamos favoritas: 
+curl -X POST http://127.0.0.1:8844/api/v1/favorita/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453" -d "id=2"
+curl -X POST http://127.0.0.1:8844/api/v1/favorita/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453" -d "id=3"
+
+Vemos los ids en : http://127.0.0.1:8844/api/v1/peliculas/
+
+Si volvemos a ejecutar: 
+curl -X GET http://127.0.0.1:8844/api/v1/favoritas/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453"
+Observamos que ahora la lista tiene contenido con las 2 películas anteriores
+
+Si vuelvo a ejecutar : curl -X POST http://127.0.0.1:8844/api/v1/favorita/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453" -d "id=3"
+Me elimina la película con id 3.
+Lo comprobamos volviendo a ejecutar:curl -X GET http://127.0.0.1:8844/api/v1/favoritas/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453"
+
+---
+
+Top de películas favoritas y filtros
+Parte más compleja del proyecto.
+Tenemos que encontrar una forma de contar el número de favoritos de cada película y devolver la lista de películas ordenadas a partir de ese campo.
+
+En api/models.py, en la class Pelicula:
+favoritos = models.IntegerField(default=0)
+
+Fuera de las clases Pelicula y PeliculaFavorita, debajo del todo: 
+from django.db.models.signals import post_save, post_delete
+
+def update_favoritos(sender, instance, **kwargs):
+  count = instance.pelicula.peliculafavorita_set.all().count()
+  instance.pelicula.favoritos = count
+  instance.pelicula.save()
+
+# en el post delete se pasa la copia de la instance que ya no existe
+post_save.connect(update_favoritos, sender=PeliculaFavorita)
+post_delete.connect(update_favoritos, sender=PeliculaFavorita)  
+
+
+En cmd, Migraciones: 
+pipenv run make
+pipenv run migrate
+
+Vamos a http://127.0.0.1:8844/api/v1/peliculas/ y observamos el nuevo campo favoritos, inicialmente a 0.
+
+
+Creamos alguna favorita incluso con diferentes tokens de usuarios diferentes:
+curl -X POST http://127.0.0.1:8844/api/v1/favorita/ -H "Authorization: Token ac62e2e56b03e3ea299a7f9fccccc482eca89453" -d "id=3"
+curl -X POST http://127.0.0.1:8844/api/v1/favorita/ -H "Authorization: Token 22f5d428f86dbca706aaa1775cbe32f6ab333dfa" -d "id=3"
+
+Ahora obvervamos el campo favoritos modificado en http://127.0.0.1:8844/api/v1/peliculas/
+Hay 2 favoritos, uno de cada usuario en la película con id=3, o sea "El Padrino 3".
+
+
+
+
+Filtros de ordenamiento y búsqueda al ViewSet de películas que DRF maneja automáticamente:
+
+En api/views.py:
+
+from rest_framework import viewsets, views, filters
+
+Añadimos en class PeliculaViewSet(viewsets.ModelViewSet):
+  filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+  search_fields = ['titulo','estreno']
+  ordering_fields = ['favoritos']
+
+
+Finalmente desde la interfaz web de DRF podemos filtrar y ordenar las películas con el botón Filtros.

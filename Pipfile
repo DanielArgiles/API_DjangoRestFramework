@@ -1,0 +1,22 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+django = "==2.2.3"
+djangorestframework = "*"
+markdown = "*"
+django-filter = "==2.1.0"
+django-rest-auth = "==0.9.3"
+django-allauth = "==0.38.0"
+
+[requires]
+python_version = "3.8"
+
+[scripts]
+dev= "python manage.py runserver 127.0.0.1:8844"
+make= "python manage.py makemigrations"
+migrate "python manage.py migrate"
